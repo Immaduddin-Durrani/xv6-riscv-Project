@@ -1,5 +1,7 @@
 #define SBRK_ERROR ((char *)-1)
 
+typedef unsigned int uint;
+
 struct stat;
 
 // system calls
@@ -24,6 +26,10 @@ int getpid(void);
 char* sys_sbrk(int,int);
 int pause(int);
 int uptime(void);
+int sleep(int);
+int yield(void);
+int boostproc(void);
+
 
 // ulib.c
 int stat(const char*, struct stat*);
@@ -47,3 +53,14 @@ void printf(const char*, ...) __attribute__ ((format (printf, 1, 2)));
 // umalloc.c
 void* malloc(uint);
 void free(void*);
+
+// user-space copy of struct procinfo for getprocinfo syscall
+struct procinfo {
+  int pid;
+  int state;
+  int priority;
+  int ticks_used;
+  int q_ticks[4];
+};
+int getprocinfo(int pid, struct procinfo *pi); // prototype
+

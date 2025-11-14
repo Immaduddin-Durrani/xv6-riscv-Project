@@ -1,3 +1,14 @@
+#define NQUEUES 4
+#define QUANTA0 1    // top priority queue time slice
+#define QUANTA1 2
+#define QUANTA2 4
+#define QUANTA3 8
+
+#define BOOST_INTERVAL 200   // ticks for priority boost
+
+void priority_boost(void);  // function prototype
+
+
 // Saved registers for kernel context switches.
 struct context {
   uint64 ra;
@@ -104,4 +115,23 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  
+  int curr_queue;        // current queue index (0=highest, 3=lowest)
+  int ticks_used;        // total ticks used in current queue
+  int q_ticks[NQUEUES];  // ticks used in each queue
+
+
 };
+
+// ---------- procinfo: data returned to user by getprocinfo ----------
+struct procinfo {
+  int pid;
+  int state;        // numeric state (0 UNUSED, 1 SLEEPING, 2 RUNNABLE, 3 RUNNING, 4 ZOMBIE)
+  int priority;     // MLFQ priority level (0..3). Default 0 until MLFQ implemented.
+  int ticks_used;   // ticks used in current queue
+  int q_ticks[4];   // (optional) total ticks used in each queue
+};
+
+int get_procinfo(int pid, struct procinfo *out);
+uint64 sys_boostproc(void);
+

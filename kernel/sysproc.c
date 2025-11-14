@@ -7,6 +7,9 @@
 #include "proc.h"
 #include "vm.h"
 
+extern void priority_boost(void);
+
+
 uint64
 sys_exit(void)
 {
@@ -106,4 +109,57 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+extern int get_procinfo(int pid, struct procinfo *out);
+
+uint64
+sys_getprocinfo(void)
+{
+  int pid;
+  uint64 user_addr;
+  struct procinfo info;
+
+  // RISC-V: argint() and argaddr() do NOT return values
+  argint(0, &pid);
+  argaddr(1, &user_addr);
+
+  // kernel-side function
+  if(get_procinfo(pid, &info) < 0)
+    return -1;
+
+  // copy to user
+  if(copyout(myproc()->pagetable, user_addr, (char *)&info, sizeof(info)) < 0)
+    return -1;
+
+  return 0;
+}
+
+uint64
+sys_sleep(void)
+{
+  int n;
+  uint ticks0;
+
+  // Use the same pattern as other syscalls in your file
+  argint(0, &n);
+  
+  acquire(&tickslock);
+  ticks0 = ticks;
+  while(ticks - ticks0 < n){
+    if(myproc()->killed){
+      release(&tickslock);
+      return -1;
+    }
+    sleep(&ticks, &tickslock);
+  }
+  release(&tickslock);
+  return 0;
+}
+
+uint64
+sys_yield(void)
+{
+    yield();
+    return 0;
 }

@@ -7,14 +7,28 @@
 #include "defs.h"
 
 struct cpu cpus[NCPU];
-
 struct proc proc[NPROC];
-
 struct proc *initproc;
-
 int nextpid = 1;
 struct spinlock pid_lock;
 
+void
+priority_boost(void) {
+    struct proc *p;
+
+    for(p = proc; p < &proc[NPROC]; p++){
+        acquire(&p->lock);
+        if(p->state == RUNNABLE || p->state == RUNNING){
+            p->curr_queue = 0;  // Reset to highest priority queue
+            p->ticks_used = 0;
+            // Reset ticks for all queues
+            for(int i = 0; i < NQUEUES; i++) {
+                p->q_ticks[i] = 0;
+            }
+        }
+        release(&p->lock);
+    }
+}
 extern void forkret(void);
 static void freeproc(struct proc *p);
 
@@ -102,10 +116,6 @@ allocpid()
   return pid;
 }
 
-// Look in the process table for an UNUSED proc.
-// If found, initialize state required to run in the kernel,
-// and return with p->lock held.
-// If there are no free procs, or a memory allocation fails, return 0.
 static struct proc*
 allocproc(void)
 {
@@ -123,6 +133,11 @@ allocproc(void)
 
 found:
   p->pid = allocpid();
+  p->curr_queue = 0;  // Start in highest priority queue
+  p->ticks_used = 0;
+  for(int i = 0; i < NQUEUES; ++i) 
+    p->q_ticks[i] = 0;
+
   p->state = USED;
 
   // Allocate a trapframe page.
@@ -415,12 +430,6 @@ kwait(uint64 addr)
 }
 
 // Per-CPU process scheduler.
-// Each CPU calls scheduler() after setting itself up.
-// Scheduler never returns.  It loops, doing:
-//  - choose a process to run.
-//  - swtch to start running that process.
-//  - eventually that process transfers control
-//    via swtch back to the scheduler.
 void
 scheduler(void)
 {
@@ -429,34 +438,59 @@ scheduler(void)
 
   c->proc = 0;
   for(;;){
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting. Then turn them back off
-    // to avoid a possible race between an interrupt
-    // and wfi.
     intr_on();
     intr_off();
 
     int found = 0;
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
+    
+    // MLFQ: Loop over queues from highest priority (0) to lowest (3)
+    for(int q = 0; q < NQUEUES; q++) {
+      for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state == RUNNABLE && p->curr_queue == q) {
+          // Found a runnable process in this queue
+          p->state = RUNNING;
+          c->proc = p;
+          
+          // Get the time quantum for this queue
+          int quantum;
+          switch(q) {
+            case 0: quantum = QUANTA0; break;
+            case 1: quantum = QUANTA1; break;
+            case 2: quantum = QUANTA2; break;
+            case 3: quantum = QUANTA3; break;
+            default: quantum = QUANTA3;
+          }
+          
+          // Switch to the process
+          swtch(&c->context, &p->context);
+          
+          // Process has returned from swtch
+          c->proc = 0;
+          
+          // Update MLFQ tracking - process may have changed state
+          if(p->state == RUNNABLE) {
+            // Process used its time slice
+            p->ticks_used++;
+            p->q_ticks[q]++;
+            
+            // Check if process should be demoted
+            if(p->ticks_used >= quantum && p->curr_queue < NQUEUES - 1) {
+              p->curr_queue++;
+              p->ticks_used = 0;
+            }
+          }
+          // If process went to SLEEPING (did I/O), ticks_used will be reset
+          
+          found = 1;
+        }
+        release(&p->lock);
+        if(found) break;
       }
-      release(&p->lock);
+      if(found) break;
     }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
+    
+    if(!found) {
       asm volatile("wfi");
     }
   }
@@ -687,4 +721,37 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int
+get_procinfo(int pid, struct procinfo *out)
+{
+  struct proc *p;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+
+    if(p->pid == pid) {
+      out->pid = p->pid;
+      out->state = p->state;
+      out->priority = p->curr_queue;  // Use curr_queue as priority
+      out->ticks_used = p->ticks_used;
+
+      for(int i = 0; i < 4; i++)
+        out->q_ticks[i] = p->q_ticks[i];
+
+      release(&p->lock);
+      return 0;   // success
+    }
+
+    release(&p->lock);
+  }
+
+  return -1;  // not found
+}
+
+uint64
+sys_boostproc(void) {
+    priority_boost();
+    return 0;
 }

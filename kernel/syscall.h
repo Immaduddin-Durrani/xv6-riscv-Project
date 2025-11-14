@@ -20,3 +20,7 @@
 #define SYS_link   19
 #define SYS_mkdir  20
 #define SYS_close  21
+#define SYS_getprocinfo  22  // pick the next free number (ensure uniqueness)
+#define SYS_sleep 23
+#define SYS_yield 24    // pick an unused number
+#define SYS_boostproc  25  // pick next free syscall number

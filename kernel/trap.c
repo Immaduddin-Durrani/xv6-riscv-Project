@@ -167,13 +167,34 @@ clockintr()
   if(cpuid() == 0){
     acquire(&tickslock);
     ticks++;
+    
+    // MLFQ: Add priority boost every BOOST_INTERVAL ticks
+    if(ticks % BOOST_INTERVAL == 0){
+      priority_boost();
+    }
+    
     wakeup(&ticks);
     release(&tickslock);
   }
 
-  // ask for the next timer interrupt. this also clears
-  // the interrupt request. 1000000 is about a tenth
-  // of a second.
+  // MLFQ: Handle process tick counting and demotion
+  struct proc *p = myproc();
+  if(p && p->state == RUNNING){
+    acquire(&p->lock);
+    p->ticks_used++;
+    p->q_ticks[p->curr_queue]++;
+    
+    // MLFQ demotion logic
+    int quanta[] = {QUANTA0, QUANTA1, QUANTA2, QUANTA3};
+    if(p->q_ticks[p->curr_queue] >= quanta[p->curr_queue] && p->curr_queue < NQUEUES-1){
+      // Demote to lower queue
+      p->curr_queue++;
+      p->q_ticks[p->curr_queue] = 0;
+      p->ticks_used = 0;
+    }
+    release(&p->lock);
+  }
+
   w_stimecmp(r_time() + 1000000);
 }
 

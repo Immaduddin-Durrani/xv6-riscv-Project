@@ -1,3 +1,4 @@
+CPUS := 1
 K=kernel
 U=user
 
@@ -129,6 +130,7 @@ UPROGS=\
 	$U/_forktest\
 	$U/_grep\
 	$U/_init\
+	$U/_getprocinfo\
 	$U/_kill\
 	$U/_ln\
 	$U/_ls\
@@ -143,6 +145,15 @@ UPROGS=\
 	$U/_logstress\
 	$U/_forphan\
 	$U/_dorphan\
+	$U/_test_multiproc\
+	$U/_monitor\
+	$U/_week1_test\
+	$U/_test1\
+	$U/_test2\
+	$U/_test_mlfq\
+	$U/_cpu_bound\
+	$U/_io_bound\
+	$U/_boosttest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

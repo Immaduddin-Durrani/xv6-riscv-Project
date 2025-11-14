@@ -4,6 +4,8 @@
 #include "kernel/riscv.h"
 #include "kernel/vm.h"
 #include "user/user.h"
+#include "kernel/syscall.h"
+
 
 //
 // wrapper so that it's OK if main() does not call exit().
@@ -17,6 +19,45 @@ start(int argc, char **argv)
   exit(r);
 }
 
+int
+yield(void)
+{
+    uint64 ret;
+    register uint64 a7 __asm__("a7") = SYS_yield;
+    __asm__ volatile("ecall"
+                     : "=r"(ret)
+                     : "r"(a7)
+                     : "memory");
+    return ret;
+}
+
+int
+sleep(int ticks)
+{
+    uint64 ret;
+    register uint64 a0 __asm__("a0") = (uint64)ticks;
+    register uint64 a7 __asm__("a7") = SYS_sleep;
+    __asm__ volatile("ecall"
+                     : "=r"(ret)
+                     : "r"(a0), "r"(a7)
+                     : "memory");
+    return ret;
+}
+
+int
+boostproc(void)
+{
+    uint64 ret;
+    register uint64 a7 __asm__("a7") = SYS_boostproc;
+    __asm__ volatile("ecall"
+                     : "=r"(ret)
+                     : "r"(a7)
+                     : "memory");
+    return ret;
+}
+
+
+// Rest of your existing functions remain unchanged
 char*
 strcpy(char *s, const char *t)
 {
@@ -158,4 +199,3 @@ char *
 sbrklazy(int n) {
   return sys_sbrk(n, SBRK_LAZY);
 }
-
