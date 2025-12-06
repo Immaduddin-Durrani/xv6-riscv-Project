@@ -96,10 +96,10 @@ priority_boost(void) {
       }
       release(&mlfq[q].lock);
     }
-    // Also boost RUNNING processes (not in queues)
+    // Also boost RUNNING and SLEEPING processes (not in queues)
     for(p = proc; p < &proc[NPROC]; p++){
         acquire(&p->lock);
-        if(p->state == RUNNING){
+        if(p->state == RUNNING || p->state == SLEEPING){
             p->curr_queue = 0;
             p->ticks_used = 0;
             for(int i = 0; i < NQUEUES; i++) p->q_ticks[i] = 0;
