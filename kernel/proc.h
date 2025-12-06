@@ -115,12 +115,13 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  
+ 
   int curr_queue;        // current queue index (0=highest, 3=lowest)
   int ticks_used;        // total ticks used in current queue
   int q_ticks[NQUEUES];  // ticks used in each queue
 
-
+  // MLFQ queue linkage
+  struct proc *next_in_queue;  // next process in same priority queue
 };
 
 // ---------- procinfo: data returned to user by getprocinfo ----------
@@ -134,4 +135,3 @@ struct procinfo {
 
 int get_procinfo(int pid, struct procinfo *out);
 uint64 sys_boostproc(void);
-
