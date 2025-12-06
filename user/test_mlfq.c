@@ -2,7 +2,7 @@
 #include "user/user.h"
 
 #define N 3  // Smaller number for clearer output
-#define ITER 15 // More iterations to see behavior over time
+#define ITER 50 // More iterations to ensure processes are alive during boost test
 
 // CPU-bound: should be demoted to lower queues
 void cpu_bound(int id) {
@@ -80,29 +80,47 @@ void mixed_bound(int id) {
     exit(0);
 }
 
+// State names for debugging
+char* state_name(int state) {
+    switch(state) {
+        case 0: return "UNUSED";
+        case 1: return "USED";
+        case 2: return "SLEEPING";
+        case 3: return "RUNNABLE";
+        case 4: return "RUNNING";
+        case 5: return "ZOMBIE";
+        default: return "UNKNOWN";
+    }
+}
+
 void test_boosting() {
     printf("\n=== Testing Priority Boost ===\n");
     
     // Check states before boost
-    printf("Pre-boost state snapshot:\n");
+    printf("Pre-boost state snapshot (only active processes):\n");
     for (int i = 0; i < N*3; i++) {
         struct procinfo pi;
         if (getprocinfo(i+4, &pi) == 0) { // PIDs start from 4
-            printf("PID %d: queue %d\n", pi.pid, pi.priority);
+            // Only show non-ZOMBIE processes for meaningful boost test
+            if (pi.state != 5) { // 5 = ZOMBIE
+                printf("PID %d: queue %d state %s\n", pi.pid, pi.priority, state_name(pi.state));
+            }
         }
     }
     
     // Perform boost
+    printf("Calling boostproc()...\n");
     boostproc();
     printf("Boost completed.\n");
     
-    // Check states after boost
-    sleep(10);
-    printf("Post-boost state snapshot:\n");
+    // Check states after boost (immediately, no sleep)
+    printf("Post-boost state snapshot (only active processes):\n");
     for (int i = 0; i < N*3; i++) {
         struct procinfo pi;
         if (getprocinfo(i+4, &pi) == 0) {
-            printf("PID %d: queue %d\n", pi.pid, pi.priority);
+            if (pi.state != 5) { // 5 = ZOMBIE
+                printf("PID %d: queue %d state %s\n", pi.pid, pi.priority, state_name(pi.state));
+            }
         }
     }
 }
